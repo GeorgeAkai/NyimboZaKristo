@@ -1,12 +1,32 @@
+import { useMemo } from 'react'
+import { lyricDisplayClasses, type DisplayPreferences } from '../lib/displayPreferences'
+import { stripDuplicateTitleFromLyrics } from '../lib/lyricsDisplay'
+
 interface FormattedLyricsProps {
   lyrics: string
+  hymnTitle?: string
+  displayPreferences?: DisplayPreferences
 }
 
 const verseLinePattern = /^(\d{1,2})\.\s*(.*)$/
 const chorusPattern = /^chorus$/i
 
-export function FormattedLyrics({ lyrics }: FormattedLyricsProps) {
-  const stanzas = lyrics.split(/\n\n+/).filter((block) => block.trim())
+function VerseNumber({ number }: { number: string }) {
+  return (
+    <span className="font-semibold tabular-nums text-gold-600 dark:text-gold-400">{number}. </span>
+  )
+}
+
+export function FormattedLyrics({ lyrics, hymnTitle, displayPreferences }: FormattedLyricsProps) {
+  const typography = displayPreferences ? lyricDisplayClasses(displayPreferences) : 'text-lg leading-8 font-serif'
+  const bodyClass = `whitespace-pre-line text-slate-800 dark:text-slate-100 ${typography}`
+
+  const preparedLyrics = useMemo(
+    () => (hymnTitle ? stripDuplicateTitleFromLyrics(lyrics, hymnTitle) : lyrics.trim()),
+    [hymnTitle, lyrics],
+  )
+
+  const stanzas = preparedLyrics.split(/\n\n+/).filter((block) => block.trim())
 
   return (
     <div className="space-y-6">
@@ -19,11 +39,7 @@ export function FormattedLyrics({ lyrics }: FormattedLyricsProps) {
           return (
             <div key={index}>
               <p className="mb-2 font-semibold text-gold-600 dark:text-gold-400">Chorus</p>
-              {chorusBody && (
-                <p className="whitespace-pre-line leading-8 text-slate-800 dark:text-slate-100">
-                  {chorusBody}
-                </p>
-              )}
+              {chorusBody && <p className={bodyClass}>{chorusBody}</p>}
             </div>
           )
         }
@@ -35,16 +51,22 @@ export function FormattedLyrics({ lyrics }: FormattedLyricsProps) {
           const bodyLines = [...(restFirstLine ? [restFirstLine] : []), ...lines.slice(1)]
           const body = bodyLines.join('\n').trim()
 
-          return (
-            <div key={index}>
-              <p className="mb-2 font-semibold tabular-nums text-gold-600 dark:text-gold-400">
+          if (!body) {
+            return (
+              <p key={index} className="mb-2 font-semibold tabular-nums text-gold-600 dark:text-gold-400">
                 {verseNumber}.
               </p>
-              {body ? (
-                <p className="whitespace-pre-line leading-8 text-slate-800 dark:text-slate-100">
-                  {body}
-                </p>
-              ) : null}
+            )
+          }
+
+          const [firstLineOfBody, ...restBody] = body.split('\n')
+          return (
+            <div key={index}>
+              <p className={bodyClass}>
+                <VerseNumber number={verseNumber} />
+                {firstLineOfBody}
+              </p>
+              {restBody.length > 0 ? <p className={bodyClass}>{restBody.join('\n')}</p> : null}
             </div>
           )
         }
@@ -52,23 +74,20 @@ export function FormattedLyrics({ lyrics }: FormattedLyricsProps) {
         const gluedMatch = firstLine.match(/^(\d{1,2})([A-Za-z"'(].+)$/)
         if (gluedMatch) {
           const body = [gluedMatch[2].trim(), ...lines.slice(1)].join('\n').trim()
+          const [firstLineOfBody, ...restBody] = body.split('\n')
           return (
             <div key={index}>
-              <p className="mb-2 font-semibold tabular-nums text-gold-600 dark:text-gold-400">
-                {gluedMatch[1]}.
+              <p className={bodyClass}>
+                <VerseNumber number={gluedMatch[1]} />
+                {firstLineOfBody}
               </p>
-              <p className="whitespace-pre-line leading-8 text-slate-800 dark:text-slate-100">
-                {body}
-              </p>
+              {restBody.length > 0 ? <p className={bodyClass}>{restBody.join('\n')}</p> : null}
             </div>
           )
         }
 
         return (
-          <p
-            key={index}
-            className="whitespace-pre-line leading-8 text-slate-800 dark:text-slate-100"
-          >
+          <p key={index} className={bodyClass}>
             {stanza}
           </p>
         )

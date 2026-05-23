@@ -15,6 +15,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:offline-instrumentals": "node scripts/build-offline-instrumentals.mjs",
     "preview": "vite preview",
     "cap:copy": "npx cap copy",
     "cap:sync": "npx cap sync",
@@ -49,6 +52,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "autoprefixer": "^10.5.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -59,6 +63,7 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.3",
     "vite": "^5.4.21",
-    "vite-plugin-pwa": "^0.20.5"
+    "vite-plugin-pwa": "^0.20.5",
+    "vitest": "^3.2.4"
   }
 }

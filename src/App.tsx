@@ -9,14 +9,34 @@ import { HymnDetail } from './components/HymnDetail'
 import { EnglishHymnList } from './components/EnglishHymnList'
 import { EnglishHymnDetail } from './components/EnglishHymnDetail'
 import { CreditsPanel } from './components/CreditsPanel'
-import { FloatingMediaPlayer } from './components/FloatingMediaPlayer'
+import { SettingsScreen } from './components/SettingsScreen'
 import { ScrollNavButtons } from './components/ScrollNavButtons'
+import { NowPlayingStrip } from './components/NowPlayingStrip'
+import { MinimizedMediaPlayer } from './components/MinimizedMediaPlayer'
+import { BackgroundMediaPlayback } from './components/BackgroundMediaPlayback'
 import { buildMediaSession, type MediaSession } from './lib/hymnMedia'
+import {
+  getDisplayPreferences,
+  resolveEffectiveTheme,
+  setDisplayPreferences,
+  type DisplayPreferences,
+} from './lib/displayPreferences'
+import { resolveInstrumentalPlayback } from './lib/instrumentalSource'
+import {
+  hymnRefsEqual,
+  initialMediaPlaybackState,
+  reduceMediaPlayback,
+  shouldShowNowPlayingStrip,
+  type HymnRef,
+} from './lib/mediaPlaybackController'
 import type { AppHistoryState } from './lib/appHistory'
 import { pushAppHistory, readAppHistoryState, replaceAppHistory } from './lib/appHistory'
 import { LIST_SCROLL_KEYS, type AppView } from './lib/navigation'
 import { clearListScroll, restoreListScroll, saveListScroll } from './lib/scrollRestore'
+import { useConnectivity } from './hooks/useConnectivity'
+import { useOfflineManifest } from './hooks/useOfflineManifest'
 import type { EnglishHymn, Hymn, HymnalCollection } from './types/hymn'
+import packageJson from '../package.json'
 
 const hymns = hymnsData as Hymn[]
 const englishHymns = (gccsatxHymnsData as EnglishHymn[]).map((hymn) => ({
@@ -24,7 +44,6 @@ const englishHymns = (gccsatxHymnsData as EnglishHymn[]).map((hymn) => ({
   collection: 'gccsatx' as const,
 }))
 
-const THEME_KEY = 'nzk-theme'
 const LANGUAGE_KEY = 'nzk-language'
 const COLLECTION_KEY = 'nzk-collection'
 const LAST_NZK_HYMN_KEY = 'nzk-last-hymn-id'
@@ -35,7 +54,19 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
 }
 
+function getDisplayedHymnRef(
+  nzkHymn: Hymn | null,
+  englishHymn: EnglishHymn | null,
+): HymnRef | null {
+  if (nzkHymn) return { collection: 'nzk', id: nzkHymn.id }
+  if (englishHymn) return { collection: 'gccsatx', id: englishHymn.id }
+  return null
+}
+
 function App() {
+  const { isOnline } = useConnectivity()
+  const offlineManifest = useOfflineManifest()
+
   const [view, setView] = useState<AppView>(() => {
     const saved = localStorage.getItem(COLLECTION_KEY)
     if (saved === 'baptist') return 'gccsatx'
@@ -56,14 +87,39 @@ function App() {
     const saved = localStorage.getItem(LANGUAGE_KEY)
     return saved === 'en' ? 'en' : 'sw'
   })
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem(THEME_KEY) === 'dark')
+  const [displayPreferences, setDisplayPreferencesState] = useState<DisplayPreferences>(() =>
+    getDisplayPreferences(localStorage),
+  )
+  const [systemPrefersDark, setSystemPrefersDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches,
+  )
   const [activeCategory, setActiveCategory] = useState<Hymn['category'] | 'All'>('All')
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [installToast, setInstallToast] = useState<string | null>(null)
   const [returnView, setReturnView] = useState<AppView>('home')
-  const [mediaSession, setMediaSession] = useState<MediaSession | null>(null)
-  const [selectedVideoId, setSelectedVideoId] = useState('')
+  const [playbackState, setPlaybackState] = useState(initialMediaPlaybackState)
+  const [activeMediaSession, setActiveMediaSession] = useState<MediaSession | null>(null)
+  const [bandVideoId, setBandVideoId] = useState(() => {
+    const savedNzkId = Number(localStorage.getItem(LAST_NZK_HYMN_KEY))
+    if (savedNzkId) {
+      const hymn = hymns.find((item) => item.id === savedNzkId)
+      return hymn ? buildMediaSession(hymn)?.videoId ?? '' : ''
+    }
+    const savedEnglishId = Number(localStorage.getItem(LAST_ENGLISH_HYMN_KEY))
+    if (savedEnglishId) {
+      const hymn = englishHymns.find((item) => item.id === savedEnglishId)
+      return hymn ? buildMediaSession(hymn)?.videoId ?? '' : ''
+    }
+    return ''
+  })
   const isHistoryNavigation = useRef(false)
+
+  const updateDisplayPreferences = useCallback((partial: Partial<DisplayPreferences>) => {
+    setDisplayPreferencesState(setDisplayPreferences(localStorage, partial))
+  }, [])
+
+  const effectiveDark =
+    resolveEffectiveTheme(displayPreferences.theme, systemPrefersDark) === 'dark'
 
   const buildHistoryState = useCallback(
     (next: {
@@ -81,12 +137,22 @@ function App() {
   )
 
   const applyHistoryState = useCallback((state: AppHistoryState, restoreScroll = false) => {
+    const nzkHymn = state.nzkHymnId ? hymns.find((h) => h.id === state.nzkHymnId) ?? null : null
+    const englishHymn = state.englishHymnId
+      ? englishHymns.find((h) => h.id === state.englishHymnId) ?? null
+      : null
+
     setView(state.view)
     setReturnView(state.returnView ?? 'home')
-    setSelectedNzkHymn(state.nzkHymnId ? hymns.find((h) => h.id === state.nzkHymnId) ?? null : null)
-    setSelectedEnglishHymn(
-      state.englishHymnId ? englishHymns.find((h) => h.id === state.englishHymnId) ?? null : null,
-    )
+    setSelectedNzkHymn(nzkHymn)
+    setSelectedEnglishHymn(englishHymn)
+
+    const hymn = nzkHymn ?? englishHymn
+    if (hymn) {
+      setBandVideoId(buildMediaSession(hymn)?.videoId ?? '')
+    } else {
+      setBandVideoId('')
+    }
 
     if (!restoreScroll) return
 
@@ -171,16 +237,24 @@ function App() {
 
   useEffect(() => {
     const root = document.documentElement
-    root.classList.toggle('dark', darkMode)
-    localStorage.setItem(THEME_KEY, darkMode ? 'dark' : 'light')
-  }, [darkMode])
+    root.classList.toggle('dark', effectiveDark)
+  }, [effectiveDark])
+
+  useEffect(() => {
+    if (displayPreferences.theme !== 'system') return
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const update = () => setSystemPrefersDark(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [displayPreferences.theme])
 
   useEffect(() => {
     localStorage.setItem(LANGUAGE_KEY, language)
   }, [language])
 
   useEffect(() => {
-    if (view === 'home' || view === 'credits') {
+    if (view === 'home' || view === 'credits' || view === 'settings') {
       localStorage.removeItem(COLLECTION_KEY)
       return
     }
@@ -203,23 +277,88 @@ function App() {
     localStorage.removeItem(LAST_ENGLISH_HYMN_KEY)
   }, [selectedEnglishHymn])
 
-  useEffect(() => {
-    const hymn = selectedNzkHymn ?? selectedEnglishHymn
-    if (!hymn) return
+  const buildPlaybackSession = useCallback(
+    (hymn: Hymn | EnglishHymn, collection: HymnalCollection): MediaSession | null => {
+      const label =
+        collection === 'nzk' && 'id' in hymn
+          ? `${hymn.id}. ${hymn.title}`
+          : `${hymn.id}. ${hymn.title}`
+      const session = buildMediaSession(hymn, label)
+      if (!session) return null
 
-    const session = buildMediaSession(hymn)
-    if (session) {
-      setMediaSession(session)
-      setSelectedVideoId(session.videoId)
+      if (collection === 'gccsatx' && 'instrumental_url' in hymn) {
+        const instrumental = resolveInstrumentalPlayback({
+          hymnId: hymn.id,
+          remoteUrl: hymn.instrumental_url,
+          isOnline,
+          manifest: offlineManifest,
+        })
+        return { ...session, instrumentalUrl: instrumental.url ?? '' }
+      }
+
+      return session
+    },
+    [isOnline, offlineManifest],
+  )
+
+  const stopAccompaniment = useCallback(() => {
+    setPlaybackState((prev) => reduceMediaPlayback(prev, { type: 'STOP_ACCOMPANIMENT' }))
+    setActiveMediaSession(null)
+    setBandVideoId('')
+  }, [])
+
+  const handleBandVideoChange = useCallback((videoId: string) => {
+    setBandVideoId(videoId)
+    setActiveMediaSession((prev) => (prev ? { ...prev, videoId } : null))
+    setPlaybackState((prev) => {
+      if (!prev.isPlaying) return prev
+      return reduceMediaPlayback(prev, { type: 'SET_VIDEO_ID', videoId })
+    })
+  }, [])
+
+  const startAccompaniment = useCallback(
+    (videoIdOverride?: string) => {
+      const hymn = selectedNzkHymn ?? selectedEnglishHymn
+      if (!hymn) return
+      const collection: HymnalCollection = selectedNzkHymn ? 'nzk' : 'gccsatx'
+      const session = buildPlaybackSession(hymn, collection)
+      if (!session) return
+
+      const hymnRef: HymnRef = { collection, id: hymn.id }
+      const videoId = videoIdOverride || bandVideoId || session.videoId
+
+      setPlaybackState((prev) =>
+        reduceMediaPlayback(prev, {
+          type: 'START_ACCOMPANIMENT',
+          hymnRef,
+          videoId,
+        }),
+      )
+      setActiveMediaSession({ ...session, videoId })
+      setBandVideoId(videoId)
+    },
+    [bandVideoId, buildPlaybackSession, selectedEnglishHymn, selectedNzkHymn],
+  )
+
+  const goToActiveHymn = useCallback(() => {
+    const ref = playbackState.activeHymnRef
+    if (!ref) return
+
+    if (ref.collection === 'nzk') {
+      const hymn = hymns.find((item) => item.id === ref.id)
+      if (hymn) {
+        navigate({ view: 'nzk', nzkHymn: hymn, englishHymn: null })
+        window.scrollTo(0, 0)
+      }
+      return
     }
-  }, [selectedNzkHymn, selectedEnglishHymn])
 
-  const closeFloatingPlayer = () => {
-    setMediaSession(null)
-    setSelectedVideoId('')
-  }
-
-  const showFloatingPlayer = Boolean(mediaSession)
+    const hymn = englishHymns.find((item) => item.id === ref.id)
+    if (hymn) {
+      navigate({ view: 'gccsatx', nzkHymn: null, englishHymn: hymn })
+      window.scrollTo(0, 0)
+    }
+  }, [navigate, playbackState.activeHymnRef])
 
   useEffect(() => {
     if (!installToast) return
@@ -286,7 +425,6 @@ function App() {
   const goHome = () => {
     clearListScroll(LIST_SCROLL_KEYS.nzk)
     clearListScroll(LIST_SCROLL_KEYS.gccsatx)
-    closeFloatingPlayer()
     navigate({ view: 'home', nzkHymn: null, englishHymn: null }, 'replace')
     setSearch('')
     setActiveCategory('All')
@@ -295,7 +433,6 @@ function App() {
 
   const openCollection = (collection: HymnalCollection) => {
     clearListScroll(LIST_SCROLL_KEYS[collection])
-    closeFloatingPlayer()
     navigate({
       view: collection,
       nzkHymn: null,
@@ -308,12 +445,14 @@ function App() {
 
   const selectNzkHymn = (hymn: Hymn) => {
     saveListScroll(LIST_SCROLL_KEYS.nzk)
+    setBandVideoId(buildMediaSession(hymn)?.videoId ?? '')
     navigate({ view: 'nzk', nzkHymn: hymn, englishHymn: null })
     window.scrollTo(0, 0)
   }
 
   const selectEnglishHymn = (hymn: EnglishHymn) => {
     saveListScroll(LIST_SCROLL_KEYS.gccsatx)
+    setBandVideoId(buildMediaSession(hymn)?.videoId ?? '')
     navigate({ view: 'gccsatx', nzkHymn: null, englishHymn: hymn })
     window.scrollTo(0, 0)
   }
@@ -327,35 +466,65 @@ function App() {
     })
   }
 
+  const openSettings = () => {
+    navigate({
+      view: 'settings',
+      returnView: view,
+      nzkHymn: selectedNzkHymn,
+      englishHymn: selectedEnglishHymn,
+    })
+  }
+
   const navbarSubtitle =
-    view === 'gccsatx' ? 'English Hymns' : view === 'nzk' ? 'Nyimbo za Kristo' : 'SDA Hymnal PWA'
+    view === 'gccsatx'
+      ? 'English Hymns'
+      : view === 'nzk'
+        ? 'Nyimbo za Kristo'
+        : view === 'settings'
+          ? 'Settings'
+          : 'SDA Hymnal PWA'
 
   const isDetailView = Boolean(selectedNzkHymn || selectedEnglishHymn)
-  const mobileSplitLayout = isDetailView && showFloatingPlayer
+  const displayedHymnRef = getDisplayedHymnRef(selectedNzkHymn, selectedEnglishHymn)
+  const onActiveHymnDetail =
+    isDetailView &&
+    playbackState.activeHymnRef !== null &&
+    hymnRefsEqual(playbackState.activeHymnRef, displayedHymnRef)
+
+  const showNowPlaying =
+    playbackState.isPlaying &&
+    shouldShowNowPlayingStrip(playbackState.activeHymnRef, displayedHymnRef)
+
+  const showMinimizedPlayer =
+    playbackState.isPlaying && activeMediaSession !== null && !onActiveHymnDetail
+
+  const showBackgroundPlayer =
+    playbackState.isPlaying && activeMediaSession !== null && !onActiveHymnDetail
+
+  const activeVideoId = playbackState.selectedVideoId || activeMediaSession?.videoId || ''
+
+  const mainBottomPadding = showMinimizedPlayer ? 'pb-24' : ''
 
   return (
-    <div
-      className={`min-h-screen bg-slate-50 font-body dark:bg-navy-950 ${mobileSplitLayout ? 'max-md:overflow-hidden' : ''}`}
-    >
+    <div className="min-h-screen bg-slate-50 font-body dark:bg-navy-950">
       <Navbar
-        darkMode={darkMode}
+        darkMode={effectiveDark}
         canInstall={Boolean(installPrompt)}
         subtitle={navbarSubtitle}
-        onToggleDarkMode={() => setDarkMode((prev) => !prev)}
+        onToggleDarkMode={() => {
+          updateDisplayPreferences({ theme: effectiveDark ? 'light' : 'dark' })
+        }}
         onInstall={handleInstall}
         onGoHome={goHome}
         onShowCredits={openCredits}
+        onOpenSettings={openSettings}
       />
 
-      <main
-        className={`mx-auto max-w-5xl px-4 py-5 ${
-          mobileSplitLayout
-            ? 'max-md:fixed max-md:inset-x-0 max-md:top-[calc(3.5rem+40dvh)] max-md:bottom-0 max-md:z-10 max-md:overflow-y-auto max-md:py-3 md:pb-36 md:pr-[25rem]'
-            : showFloatingPlayer
-              ? 'pb-64 md:pb-36 md:pr-[25rem]'
-              : ''
-        }`}
-      >
+      {showNowPlaying && activeMediaSession && (
+        <NowPlayingStrip title={activeMediaSession.label} onGoToHymn={goToActiveHymn} />
+      )}
+
+      <main className={`mx-auto max-w-5xl px-4 py-5 ${mainBottomPadding}`}>
         {view === 'credits' ? (
           <CreditsPanel
             onBack={() => {
@@ -373,6 +542,14 @@ function App() {
               )
             }}
           />
+        ) : view === 'settings' ? (
+          <SettingsScreen
+            preferences={displayPreferences}
+            appVersion={packageJson.version}
+            onChange={updateDisplayPreferences}
+            onBack={historyBack}
+            onOpenCredits={openCredits}
+          />
         ) : view === 'home' ? (
           <HomeScreen onSelectCollection={openCollection} />
         ) : view === 'nzk' ? (
@@ -380,6 +557,11 @@ function App() {
             <HymnDetail
               hymn={selectedNzkHymn}
               language={language}
+              isOnline={isOnline}
+              displayPreferences={displayPreferences}
+              selectedVideoId={bandVideoId}
+              onSelectedVideoIdChange={handleBandVideoChange}
+              onAccompanimentStart={startAccompaniment}
               onToggleLanguage={() => setLanguage((prev) => (prev === 'sw' ? 'en' : 'sw'))}
               onBack={historyBack}
             />
@@ -396,7 +578,16 @@ function App() {
             />
           )
         ) : selectedEnglishHymn ? (
-          <EnglishHymnDetail hymn={selectedEnglishHymn} onBack={historyBack} />
+          <EnglishHymnDetail
+            hymn={selectedEnglishHymn}
+            isOnline={isOnline}
+            offlineManifest={offlineManifest}
+            displayPreferences={displayPreferences}
+            selectedVideoId={bandVideoId}
+            onSelectedVideoIdChange={handleBandVideoChange}
+            onAccompanimentStart={startAccompaniment}
+            onBack={historyBack}
+          />
         ) : (
           <EnglishHymnList
             hymns={filteredEnglishHymns}
@@ -409,20 +600,30 @@ function App() {
         )}
       </main>
 
-      {!mobileSplitLayout && <ScrollNavButtons />}
+      <ScrollNavButtons />
 
-      {showFloatingPlayer && mediaSession && (
-        <FloatingMediaPlayer
-          session={mediaSession}
-          selectedVideoId={selectedVideoId}
-          onSelectedVideoIdChange={setSelectedVideoId}
-          onClose={closeFloatingPlayer}
-          pinnedTop={mobileSplitLayout}
+      {showBackgroundPlayer && activeMediaSession && (
+        <BackgroundMediaPlayback
+          session={activeMediaSession}
+          selectedVideoId={activeVideoId}
+          onSelectedVideoIdChange={handleBandVideoChange}
+        />
+      )}
+
+      {showMinimizedPlayer && activeMediaSession && (
+        <MinimizedMediaPlayer
+          session={activeMediaSession}
+          onReturnToHymn={goToActiveHymn}
+          onStop={stopAccompaniment}
         />
       )}
 
       {installToast && (
-        <div className="fixed bottom-4 left-1/2 z-50 w-[92%] max-w-sm -translate-x-1/2 rounded-xl border border-gold-500/40 bg-navy-900 px-4 py-3 text-sm font-medium text-white shadow-reverent dark:bg-navy-950">
+        <div
+          className={`fixed left-1/2 z-50 w-[92%] max-w-sm -translate-x-1/2 rounded-xl border border-gold-500/40 bg-navy-900 px-4 py-3 text-sm font-medium text-white shadow-reverent dark:bg-navy-950 ${
+            showMinimizedPlayer ? 'bottom-20' : 'bottom-4'
+          }`}
+        >
           {installToast}
         </div>
       )}

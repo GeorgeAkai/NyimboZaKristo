@@ -1,4 +1,4 @@
-import { Download, Moon, Sun } from 'lucide-react'
+import { Download, Moon, Settings, Sun } from 'lucide-react'
 
 interface NavbarProps {
   darkMode: boolean
@@ -8,6 +8,7 @@ interface NavbarProps {
   onInstall: () => void
   onGoHome: () => void
   onShowCredits?: () => void
+  onOpenSettings?: () => void
 }
 
 export function Navbar({
@@ -18,6 +19,7 @@ export function Navbar({
   onInstall,
   onGoHome,
   onShowCredits,
+  onOpenSettings,
 }: NavbarProps) {
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-navy-900 dark:bg-navy-950/95">
@@ -39,6 +41,16 @@ export function Navbar({
         </button>
 
         <div className="flex items-center gap-2">
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="rounded-full border border-slate-300 p-2 text-slate-700 transition hover:border-gold-500 hover:text-gold-500 dark:border-navy-700 dark:text-slate-200"
+              aria-label="Open settings"
+            >
+              <Settings size={18} />
+            </button>
+          )}
+
           {onShowCredits && (
             <button
               onClick={onShowCredits}

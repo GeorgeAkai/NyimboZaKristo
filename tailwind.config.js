@@ -22,6 +22,9 @@ export default {
       fontFamily: {
         display: ['"Merriweather"', 'serif'],
         body: ['"Inter"', 'system-ui', 'sans-serif'],
+        montserrat: ['"Montserrat"', 'system-ui', 'sans-serif'],
+        serif: ['"Merriweather"', 'serif'],
+        sans: ['"Inter"', 'system-ui', 'sans-serif'],
       },
     },
   },
