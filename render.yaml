@@ -5,7 +5,6 @@ services:
   - type: web
     name: nyimbozakristo
     runtime: static
-    plan: free
     branch: main
     autoDeploy: true
     buildCommand: npm ci && npm run build
