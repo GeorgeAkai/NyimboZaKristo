@@ -7,7 +7,8 @@ services:
     runtime: static
     branch: main
     autoDeploy: true
-    buildCommand: npm ci && npm run build
+    # Vite/TS live in devDependencies — never set NODE_ENV=production on this service.
+    buildCommand: npm ci --include=dev && npm run build
     staticPublishPath: ./dist
 
     buildFilter:
@@ -28,8 +29,6 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20.19.0"
-      - key: NODE_ENV
-        value: production
 
     # Client-side app uses history API on a single URL; rewrite supports refresh & PWA entry.
     routes:

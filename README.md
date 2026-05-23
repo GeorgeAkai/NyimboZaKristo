@@ -38,7 +38,7 @@ The web app is a **Vite static PWA** published from `dist/`. Configuration lives
 
 | Setting | Value |
 |---------|--------|
-| **Build command** | `npm ci && npm run build` |
+| **Build command** | `npm ci --include=dev && npm run build` |
 | **Publish directory** | `dist` |
 | **Node version** | `20.19.0` (see `.node-version`) |
 
