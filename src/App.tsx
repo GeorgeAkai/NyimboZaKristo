@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Fuse from 'fuse.js'
 import hymnsData from './data/hymns.json'
 import gccsatxHymnsData from './data/gccsatx-hymns.json'
+import igboHymnsData from './data/igbo-hymns.json'
 import { Navbar } from './components/Navbar'
 import { HomeScreen } from './components/HomeScreen'
 import { HymnList } from './components/HymnList'
 import { HymnDetail } from './components/HymnDetail'
 import { EnglishHymnList } from './components/EnglishHymnList'
 import { EnglishHymnDetail } from './components/EnglishHymnDetail'
+import { IgboHymnList } from './components/IgboHymnList'
+import { IgboHymnDetail } from './components/IgboHymnDetail'
 import { CreditsPanel } from './components/CreditsPanel'
 import { SettingsScreen } from './components/SettingsScreen'
 import { ScrollNavButtons } from './components/ScrollNavButtons'
@@ -35,7 +38,7 @@ import { LIST_SCROLL_KEYS, type AppView } from './lib/navigation'
 import { clearListScroll, restoreListScroll, saveListScroll } from './lib/scrollRestore'
 import { useConnectivity } from './hooks/useConnectivity'
 import { useOfflineManifest } from './hooks/useOfflineManifest'
-import type { EnglishHymn, Hymn, HymnalCollection } from './types/hymn'
+import type { EnglishHymn, Hymn, HymnalCollection, IgboHymn } from './types/hymn'
 import packageJson from '../package.json'
 
 const hymns = hymnsData as Hymn[]
@@ -43,11 +46,13 @@ const englishHymns = (gccsatxHymnsData as EnglishHymn[]).map((hymn) => ({
   ...hymn,
   collection: 'gccsatx' as const,
 }))
+const igboHymns = igboHymnsData as IgboHymn[]
 
 const LANGUAGE_KEY = 'nzk-language'
 const COLLECTION_KEY = 'nzk-collection'
 const LAST_NZK_HYMN_KEY = 'nzk-last-hymn-id'
 const LAST_ENGLISH_HYMN_KEY = 'nzk-last-english-hymn-id'
+const LAST_IGBO_HYMN_KEY = 'nzk-last-igbo-hymn-id'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -57,31 +62,49 @@ interface BeforeInstallPromptEvent extends Event {
 function getDisplayedHymnRef(
   nzkHymn: Hymn | null,
   englishHymn: EnglishHymn | null,
+  igboHymn: IgboHymn | null,
 ): HymnRef | null {
   if (nzkHymn) return { collection: 'nzk', id: nzkHymn.id }
   if (englishHymn) return { collection: 'gccsatx', id: englishHymn.id }
+  if (igboHymn) return { collection: 'abu', id: igboHymn.id }
   return null
 }
+
+function resolveBootState() {
+  const history = readAppHistoryState()
+  if (history) {
+    return {
+      view: history.view,
+      returnView: history.returnView ?? ('home' as AppView),
+      nzkHymn: history.nzkHymnId ? hymns.find((h) => h.id === history.nzkHymnId) ?? null : null,
+      englishHymn: history.englishHymnId
+        ? englishHymns.find((h) => h.id === history.englishHymnId) ?? null
+        : null,
+      igboHymn: history.igboHymnId ? igboHymns.find((h) => h.id === history.igboHymnId) ?? null : null,
+    }
+  }
+
+  return {
+    view: 'home' as AppView,
+    returnView: 'home' as AppView,
+    nzkHymn: null,
+    englishHymn: null,
+    igboHymn: null,
+  }
+}
+
+const bootState = resolveBootState()
 
 function App() {
   const { isOnline } = useConnectivity()
   const offlineManifest = useOfflineManifest()
 
-  const [view, setView] = useState<AppView>(() => {
-    const saved = localStorage.getItem(COLLECTION_KEY)
-    if (saved === 'baptist') return 'gccsatx'
-    return saved === 'nzk' || saved === 'gccsatx' ? saved : 'home'
-  })
-  const [selectedNzkHymn, setSelectedNzkHymn] = useState<Hymn | null>(() => {
-    const savedId = Number(localStorage.getItem(LAST_NZK_HYMN_KEY))
-    if (!savedId) return null
-    return hymns.find((hymn) => hymn.id === savedId) ?? null
-  })
-  const [selectedEnglishHymn, setSelectedEnglishHymn] = useState<EnglishHymn | null>(() => {
-    const savedId = Number(localStorage.getItem(LAST_ENGLISH_HYMN_KEY))
-    if (!savedId) return null
-    return englishHymns.find((hymn) => hymn.id === savedId) ?? null
-  })
+  const [view, setView] = useState<AppView>(() => bootState.view)
+  const [selectedNzkHymn, setSelectedNzkHymn] = useState<Hymn | null>(() => bootState.nzkHymn)
+  const [selectedEnglishHymn, setSelectedEnglishHymn] = useState<EnglishHymn | null>(
+    () => bootState.englishHymn,
+  )
+  const [selectedIgboHymn, setSelectedIgboHymn] = useState<IgboHymn | null>(() => bootState.igboHymn)
   const [search, setSearch] = useState('')
   const [language, setLanguage] = useState<'sw' | 'en'>(() => {
     const saved = localStorage.getItem(LANGUAGE_KEY)
@@ -96,21 +119,12 @@ function App() {
   const [activeCategory, setActiveCategory] = useState<Hymn['category'] | 'All'>('All')
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [installToast, setInstallToast] = useState<string | null>(null)
-  const [returnView, setReturnView] = useState<AppView>('home')
+  const [returnView, setReturnView] = useState<AppView>(() => bootState.returnView)
   const [playbackState, setPlaybackState] = useState(initialMediaPlaybackState)
   const [activeMediaSession, setActiveMediaSession] = useState<MediaSession | null>(null)
   const [bandVideoId, setBandVideoId] = useState(() => {
-    const savedNzkId = Number(localStorage.getItem(LAST_NZK_HYMN_KEY))
-    if (savedNzkId) {
-      const hymn = hymns.find((item) => item.id === savedNzkId)
-      return hymn ? buildMediaSession(hymn)?.videoId ?? '' : ''
-    }
-    const savedEnglishId = Number(localStorage.getItem(LAST_ENGLISH_HYMN_KEY))
-    if (savedEnglishId) {
-      const hymn = englishHymns.find((item) => item.id === savedEnglishId)
-      return hymn ? buildMediaSession(hymn)?.videoId ?? '' : ''
-    }
-    return ''
+    const hymn = bootState.nzkHymn ?? bootState.englishHymn ?? bootState.igboHymn
+    return hymn ? buildMediaSession(hymn)?.videoId ?? '' : ''
   })
   const isHistoryNavigation = useRef(false)
 
@@ -127,11 +141,13 @@ function App() {
       returnView?: AppView
       nzkHymn?: Hymn | null
       englishHymn?: EnglishHymn | null
+      igboHymn?: IgboHymn | null
     }): AppHistoryState => ({
       view: next.view,
       returnView: next.returnView,
       nzkHymnId: next.nzkHymn?.id,
       englishHymnId: next.englishHymn?.id,
+      igboHymnId: next.igboHymn?.id,
     }),
     [],
   )
@@ -141,13 +157,15 @@ function App() {
     const englishHymn = state.englishHymnId
       ? englishHymns.find((h) => h.id === state.englishHymnId) ?? null
       : null
+    const igboHymn = state.igboHymnId ? igboHymns.find((h) => h.id === state.igboHymnId) ?? null : null
 
     setView(state.view)
     setReturnView(state.returnView ?? 'home')
     setSelectedNzkHymn(nzkHymn)
     setSelectedEnglishHymn(englishHymn)
+    setSelectedIgboHymn(igboHymn)
 
-    const hymn = nzkHymn ?? englishHymn
+    const hymn = nzkHymn ?? englishHymn ?? igboHymn
     if (hymn) {
       setBandVideoId(buildMediaSession(hymn)?.videoId ?? '')
     } else {
@@ -161,6 +179,9 @@ function App() {
     }
     if (state.view === 'gccsatx' && !state.englishHymnId) {
       restoreListScroll(LIST_SCROLL_KEYS.gccsatx)
+    }
+    if (state.view === 'abu' && !state.igboHymnId) {
+      restoreListScroll(LIST_SCROLL_KEYS.abu)
     }
   }, [])
 
@@ -176,6 +197,7 @@ function App() {
         returnView,
         nzkHymn: selectedNzkHymn,
         englishHymn: selectedEnglishHymn,
+        igboHymn: selectedIgboHymn,
       }),
     )
 
@@ -201,6 +223,7 @@ function App() {
         returnView?: AppView
         nzkHymn?: Hymn | null
         englishHymn?: EnglishHymn | null
+        igboHymn?: IgboHymn | null
       },
       mode: 'push' | 'replace' = 'push',
     ) => {
@@ -231,9 +254,10 @@ function App() {
         returnView,
         nzkHymn: selectedNzkHymn,
         englishHymn: selectedEnglishHymn,
+        igboHymn: selectedIgboHymn,
       }),
     )
-  }, [view, returnView, selectedNzkHymn, selectedEnglishHymn, buildHistoryState])
+  }, [view, returnView, selectedNzkHymn, selectedEnglishHymn, selectedIgboHymn, buildHistoryState])
 
   useEffect(() => {
     const root = document.documentElement
@@ -277,13 +301,17 @@ function App() {
     localStorage.removeItem(LAST_ENGLISH_HYMN_KEY)
   }, [selectedEnglishHymn])
 
+  useEffect(() => {
+    if (selectedIgboHymn) {
+      localStorage.setItem(LAST_IGBO_HYMN_KEY, String(selectedIgboHymn.id))
+      return
+    }
+    localStorage.removeItem(LAST_IGBO_HYMN_KEY)
+  }, [selectedIgboHymn])
+
   const buildPlaybackSession = useCallback(
-    (hymn: Hymn | EnglishHymn, collection: HymnalCollection): MediaSession | null => {
-      const label =
-        collection === 'nzk' && 'id' in hymn
-          ? `${hymn.id}. ${hymn.title}`
-          : `${hymn.id}. ${hymn.title}`
-      const session = buildMediaSession(hymn, label)
+    (hymn: Hymn | EnglishHymn | IgboHymn, collection: HymnalCollection): MediaSession | null => {
+      const session = buildMediaSession(hymn, `${hymn.id}. ${hymn.title}`)
       if (!session) return null
 
       if (collection === 'gccsatx' && 'instrumental_url' in hymn) {
@@ -318,9 +346,13 @@ function App() {
 
   const startAccompaniment = useCallback(
     (videoIdOverride?: string) => {
-      const hymn = selectedNzkHymn ?? selectedEnglishHymn
+      const hymn = selectedNzkHymn ?? selectedEnglishHymn ?? selectedIgboHymn
       if (!hymn) return
-      const collection: HymnalCollection = selectedNzkHymn ? 'nzk' : 'gccsatx'
+      const collection: HymnalCollection = selectedNzkHymn
+        ? 'nzk'
+        : selectedEnglishHymn
+          ? 'gccsatx'
+          : 'abu'
       const session = buildPlaybackSession(hymn, collection)
       if (!session) return
 
@@ -337,7 +369,7 @@ function App() {
       setActiveMediaSession({ ...session, videoId })
       setBandVideoId(videoId)
     },
-    [bandVideoId, buildPlaybackSession, selectedEnglishHymn, selectedNzkHymn],
+    [bandVideoId, buildPlaybackSession, selectedEnglishHymn, selectedIgboHymn, selectedNzkHymn],
   )
 
   const goToActiveHymn = useCallback(() => {
@@ -347,15 +379,24 @@ function App() {
     if (ref.collection === 'nzk') {
       const hymn = hymns.find((item) => item.id === ref.id)
       if (hymn) {
-        navigate({ view: 'nzk', nzkHymn: hymn, englishHymn: null })
+        navigate({ view: 'nzk', nzkHymn: hymn, englishHymn: null, igboHymn: null })
         window.scrollTo(0, 0)
       }
       return
     }
 
-    const hymn = englishHymns.find((item) => item.id === ref.id)
+    if (ref.collection === 'gccsatx') {
+      const hymn = englishHymns.find((item) => item.id === ref.id)
+      if (hymn) {
+        navigate({ view: 'gccsatx', nzkHymn: null, englishHymn: hymn, igboHymn: null })
+        window.scrollTo(0, 0)
+      }
+      return
+    }
+
+    const hymn = igboHymns.find((item) => item.id === ref.id)
     if (hymn) {
-      navigate({ view: 'gccsatx', nzkHymn: null, englishHymn: hymn })
+      navigate({ view: 'abu', nzkHymn: null, englishHymn: null, igboHymn: hymn })
       window.scrollTo(0, 0)
     }
   }, [navigate, playbackState.activeHymnRef])
@@ -396,6 +437,16 @@ function App() {
     [],
   )
 
+  const igboFuse = useMemo(
+    () =>
+      new Fuse(igboHymns, {
+        includeScore: true,
+        threshold: 0.4,
+        keys: ['title', 'first_line', 'subtitle', 'english_hint', 'id'],
+      }),
+    [],
+  )
+
   const filteredNzkHymns = useMemo(() => {
     const searched = search.trim() ? nzkFuse.search(search).map(({ item }) => item) : hymns
     return activeCategory === 'All'
@@ -409,6 +460,13 @@ function App() {
       ? searched
       : searched.filter((hymn) => hymn.category === activeCategory)
   }, [activeCategory, englishFuse, search])
+
+  const filteredIgboHymns = useMemo(() => {
+    const searched = search.trim() ? igboFuse.search(search).map(({ item }) => item) : igboHymns
+    return activeCategory === 'All'
+      ? searched
+      : searched.filter((hymn) => hymn.category === activeCategory)
+  }, [activeCategory, igboFuse, search])
 
   const handleInstall = async () => {
     if (!installPrompt) return
@@ -425,7 +483,8 @@ function App() {
   const goHome = () => {
     clearListScroll(LIST_SCROLL_KEYS.nzk)
     clearListScroll(LIST_SCROLL_KEYS.gccsatx)
-    navigate({ view: 'home', nzkHymn: null, englishHymn: null }, 'replace')
+    clearListScroll(LIST_SCROLL_KEYS.abu)
+    navigate({ view: 'home', nzkHymn: null, englishHymn: null, igboHymn: null }, 'replace')
     setSearch('')
     setActiveCategory('All')
     window.scrollTo(0, 0)
@@ -437,6 +496,7 @@ function App() {
       view: collection,
       nzkHymn: null,
       englishHymn: null,
+      igboHymn: null,
     })
     setSearch('')
     setActiveCategory('All')
@@ -446,14 +506,21 @@ function App() {
   const selectNzkHymn = (hymn: Hymn) => {
     saveListScroll(LIST_SCROLL_KEYS.nzk)
     setBandVideoId(buildMediaSession(hymn)?.videoId ?? '')
-    navigate({ view: 'nzk', nzkHymn: hymn, englishHymn: null })
+    navigate({ view: 'nzk', nzkHymn: hymn, englishHymn: null, igboHymn: null })
     window.scrollTo(0, 0)
   }
 
   const selectEnglishHymn = (hymn: EnglishHymn) => {
     saveListScroll(LIST_SCROLL_KEYS.gccsatx)
     setBandVideoId(buildMediaSession(hymn)?.videoId ?? '')
-    navigate({ view: 'gccsatx', nzkHymn: null, englishHymn: hymn })
+    navigate({ view: 'gccsatx', nzkHymn: null, englishHymn: hymn, igboHymn: null })
+    window.scrollTo(0, 0)
+  }
+
+  const selectIgboHymn = (hymn: IgboHymn) => {
+    saveListScroll(LIST_SCROLL_KEYS.abu)
+    setBandVideoId(buildMediaSession(hymn)?.videoId ?? '')
+    navigate({ view: 'abu', nzkHymn: null, englishHymn: null, igboHymn: hymn })
     window.scrollTo(0, 0)
   }
 
@@ -463,6 +530,7 @@ function App() {
       returnView: view,
       nzkHymn: selectedNzkHymn,
       englishHymn: selectedEnglishHymn,
+      igboHymn: selectedIgboHymn,
     })
   }
 
@@ -472,20 +540,23 @@ function App() {
       returnView: view,
       nzkHymn: selectedNzkHymn,
       englishHymn: selectedEnglishHymn,
+      igboHymn: selectedIgboHymn,
     })
   }
 
   const navbarSubtitle =
     view === 'gccsatx'
       ? 'English Hymns'
-      : view === 'nzk'
-        ? 'Nyimbo za Kristo'
-        : view === 'settings'
-          ? 'Settings'
-          : 'SDA Hymnal PWA'
+      : view === 'abu'
+        ? 'Igbo Hymns (Abu)'
+        : view === 'nzk'
+          ? 'Nyimbo za Kristo'
+          : view === 'settings'
+            ? 'Settings'
+            : 'SDA Hymnal PWA'
 
-  const isDetailView = Boolean(selectedNzkHymn || selectedEnglishHymn)
-  const displayedHymnRef = getDisplayedHymnRef(selectedNzkHymn, selectedEnglishHymn)
+  const isDetailView = Boolean(selectedNzkHymn || selectedEnglishHymn || selectedIgboHymn)
+  const displayedHymnRef = getDisplayedHymnRef(selectedNzkHymn, selectedEnglishHymn, selectedIgboHymn)
   const onActiveHymnDetail =
     isDetailView &&
     playbackState.activeHymnRef !== null &&
@@ -537,6 +608,7 @@ function App() {
                   view: returnView === 'credits' ? 'home' : returnView,
                   nzkHymn: null,
                   englishHymn: null,
+                  igboHymn: null,
                 },
                 'replace',
               )
@@ -577,27 +649,50 @@ function App() {
               subheading="Swahili SDA hymnal with optional English lyrics. Search by number or title."
             />
           )
-        ) : selectedEnglishHymn ? (
-          <EnglishHymnDetail
-            hymn={selectedEnglishHymn}
-            isOnline={isOnline}
-            offlineManifest={offlineManifest}
-            displayPreferences={displayPreferences}
-            selectedVideoId={bandVideoId}
-            onSelectedVideoIdChange={handleBandVideoChange}
-            onAccompanimentStart={startAccompaniment}
-            onBack={historyBack}
-          />
-        ) : (
-          <EnglishHymnList
-            hymns={filteredEnglishHymns}
-            search={search}
-            activeCategory={activeCategory}
-            onSearchChange={setSearch}
-            onCategoryChange={setActiveCategory}
-            onSelectHymn={selectEnglishHymn}
-          />
-        )}
+        ) : view === 'gccsatx' ? (
+          selectedEnglishHymn ? (
+            <EnglishHymnDetail
+              hymn={selectedEnglishHymn}
+              isOnline={isOnline}
+              offlineManifest={offlineManifest}
+              displayPreferences={displayPreferences}
+              selectedVideoId={bandVideoId}
+              onSelectedVideoIdChange={handleBandVideoChange}
+              onAccompanimentStart={startAccompaniment}
+              onBack={historyBack}
+            />
+          ) : (
+            <EnglishHymnList
+              hymns={filteredEnglishHymns}
+              search={search}
+              activeCategory={activeCategory}
+              onSearchChange={setSearch}
+              onCategoryChange={setActiveCategory}
+              onSelectHymn={selectEnglishHymn}
+            />
+          )
+        ) : view === 'abu' ? (
+          selectedIgboHymn ? (
+            <IgboHymnDetail
+              hymn={selectedIgboHymn}
+              isOnline={isOnline}
+              displayPreferences={displayPreferences}
+              selectedVideoId={bandVideoId}
+              onSelectedVideoIdChange={handleBandVideoChange}
+              onAccompanimentStart={startAccompaniment}
+              onBack={historyBack}
+            />
+          ) : (
+            <IgboHymnList
+              hymns={filteredIgboHymns}
+              search={search}
+              activeCategory={activeCategory}
+              onSearchChange={setSearch}
+              onCategoryChange={setActiveCategory}
+              onSelectHymn={selectIgboHymn}
+            />
+          )
+        ) : null}
       </main>
 
       <ScrollNavButtons />

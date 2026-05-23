@@ -17,7 +17,7 @@ from yt_dlp import YoutubeDL
 
 DATA_PATH = Path("src/data/gccsatx-hymns.json")
 MAX_SEARCH = 12
-MAX_OPTIONS = 5
+MAX_OPTIONS = 3
 MIN_TITLE_MATCH = 0.55
 SLEEP_SECONDS = 0.4
 

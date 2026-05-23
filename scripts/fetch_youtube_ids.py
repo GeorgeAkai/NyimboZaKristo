@@ -8,7 +8,7 @@ from yt_dlp import YoutubeDL
 
 DATA_PATH = Path("src/data/hymns.json")
 MAX_RESULTS = 12
-MAX_OPTIONS = 5
+MAX_OPTIONS = 3
 SLEEP_SECONDS = 0.4
 
 PREFERRED_CHANNEL_KEYWORDS = [

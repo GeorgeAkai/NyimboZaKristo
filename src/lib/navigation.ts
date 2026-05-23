@@ -5,4 +5,5 @@ export type AppView = 'home' | 'credits' | 'settings' | HymnalCollection
 export const LIST_SCROLL_KEYS: Record<HymnalCollection, string> = {
   nzk: 'nzk-list',
   gccsatx: 'gccsatx-list',
+  abu: 'abu-list',
 }

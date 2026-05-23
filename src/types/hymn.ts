@@ -28,7 +28,24 @@ export interface EnglishHymn {
   instrumental_url: string
 }
 
-export type HymnalCollection = 'nzk' | 'gccsatx'
+export interface IgboHymn {
+  id: number
+  title: string
+  first_line: string
+  subtitle: string
+  english_hint: string
+  lyrics: string
+  category: HymnCategory
+  text_source: string
+  source_url: string
+  hymnal: string
+  collection: 'abu'
+  youtube_id: string
+  youtube_options?: YouTubeOption[]
+  instrumental_url: string
+}
+
+export type HymnalCollection = 'nzk' | 'gccsatx' | 'abu'
 
 export interface Hymn {
   id: number

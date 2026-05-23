@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { BookOpen, Music } from 'lucide-react'
+import { BookOpen, Globe, Music } from 'lucide-react'
 import type { HymnalCollection } from '../types/hymn'
 
 interface HomeScreenProps {
@@ -12,12 +12,12 @@ export function HomeScreen({ onSelectCollection }: HomeScreenProps) {
       <div className="rounded-2xl bg-navy-900 p-5 text-white shadow-reverent dark:bg-navy-950">
         <h1 className="font-display text-2xl font-bold">Choose a hymnal</h1>
         <p className="mt-2 text-sm text-slate-200">
-          Swahili Nyimbo za Kristo and English hymns from gccsatx.com — each with lyrics and choir
-          videos.
+          Swahili Nyimbo za Kristo, English hymns from gccsatx.com, and Igbo Abu — lyrics for worship
+          and study.
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={() => onSelectCollection('nzk')}
@@ -48,8 +48,26 @@ export function HomeScreen({ onSelectCollection }: HomeScreenProps) {
           </h2>
           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
             350+ hymns with lyrics from{' '}
-            <span className="font-medium">gccsatx.com</span>. Up to five performances of the same
+            <span className="font-medium">gccsatx.com</span>. Up to three performances of the same
             song — Daniel Baptist, Classic Hymns, Kaleb Brasee, and other choirs.
+          </p>
+        </motion.button>
+
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={() => onSelectCollection('abu')}
+          className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-gold-500 dark:border-navy-800 dark:bg-navy-900"
+        >
+          <div className="mb-3 inline-flex rounded-full bg-gold-500/15 p-2 text-gold-500">
+            <Globe size={20} />
+          </div>
+          <h2 className="font-display text-xl font-bold text-navy-900 dark:text-white">
+            Igbo Hymns (Abu)
+          </h2>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+            SDA Igbo hymnal lyrics from the open-source{' '}
+            <span className="font-medium">Abu</span> project by joelezeu. Up to three Igbo YouTube
+            performances per hymn when available.
           </p>
         </motion.button>
       </div>

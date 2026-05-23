@@ -46,6 +46,24 @@ export function CreditsPanel({ onBack }: CreditsPanelProps) {
           </div>
 
           <div>
+            <h2 className="font-semibold text-navy-900 dark:text-gold-400">Igbo Hymns (Abu)</h2>
+            <p className="mt-1">
+              Igbo lyrics are imported from the open-source{' '}
+              <a
+                href="https://github.com/joelezeu/Abu/tree/master/assets/www"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gold-600 underline dark:text-gold-400"
+              >
+                Abu
+              </a>{' '}
+              project (joelezeu). English hints and scripture references in the source files are
+              shown when present. Re-import with{' '}
+              <code className="text-xs">npm run import:igbo-abu</code>.
+            </p>
+          </div>
+
+          <div>
             <h2 className="font-semibold text-navy-900 dark:text-gold-400">YouTube performances</h2>
             <ul className="mt-1 list-disc space-y-1 pl-5">
               <li>Videos are embedded using YouTube&apos;s official player (not downloaded or re-hosted).</li>
@@ -54,7 +72,7 @@ export function CreditsPanel({ onBack }: CreditsPanelProps) {
                 and YouTube.
               </li>
               <li>
-                Each hymn offers up to five videos of the <strong>same song</strong>, matched by
+                Each hymn offers up to three videos of the <strong>same song</strong>, matched by
                 title. Preferred sources include{' '}
                 <a
                   href="https://www.youtube.com/@danielbaptist1611"

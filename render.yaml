@@ -14,6 +14,7 @@ services:
     buildFilter:
       paths:
         - src/**
+        - src/data/igbo-hymns.json
         - public/**
         - scripts/lib/**
         - index.html

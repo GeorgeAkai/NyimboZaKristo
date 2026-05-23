@@ -1,4 +1,4 @@
-import type { EnglishHymn, Hymn, YouTubeOption } from '../types/hymn'
+import type { EnglishHymn, Hymn, IgboHymn, YouTubeOption } from '../types/hymn'
 
 export interface MediaSession {
   label: string
@@ -6,6 +6,8 @@ export interface MediaSession {
   videoId: string
   instrumentalUrl: string
 }
+
+export const MAX_YOUTUBE_OPTIONS = 3
 
 export function isValidYouTubeId(value: string) {
   return /^[a-zA-Z0-9_-]{11}$/.test(value.trim())
@@ -22,10 +24,15 @@ function isSafeMediaUrl(value?: string) {
 }
 
 export function buildMediaSession(
-  hymn: Pick<Hymn, 'id' | 'title' | 'youtube_id' | 'youtube_options' | 'instrumental_url'> | EnglishHymn,
+  hymn:
+    | Pick<Hymn, 'id' | 'title' | 'youtube_id' | 'youtube_options' | 'instrumental_url'>
+    | EnglishHymn
+    | IgboHymn,
   label?: string,
 ): MediaSession | null {
-  const youtubeOptions = (hymn.youtube_options ?? []).filter((option) => isValidYouTubeId(option.id)).slice(0, 5)
+  const youtubeOptions = (hymn.youtube_options ?? [])
+    .filter((option) => isValidYouTubeId(option.id))
+    .slice(0, MAX_YOUTUBE_OPTIONS)
   const videoId =
     youtubeOptions[0]?.id || (isValidYouTubeId(hymn.youtube_id) ? hymn.youtube_id.trim() : '')
   const instrumentalUrl = isSafeMediaUrl(hymn.instrumental_url) ? hymn.instrumental_url.trim() : ''

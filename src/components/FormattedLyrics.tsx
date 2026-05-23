@@ -1,11 +1,13 @@
 import { useMemo } from 'react'
 import { lyricDisplayClasses, type DisplayPreferences } from '../lib/displayPreferences'
 import { stripDuplicateTitleFromLyrics } from '../lib/lyricsDisplay'
+import { numberUnlabeledVerses } from '../lib/lyricsVerseNumbering'
 
 interface FormattedLyricsProps {
   lyrics: string
   hymnTitle?: string
   displayPreferences?: DisplayPreferences
+  numberVerses?: boolean
 }
 
 const verseLinePattern = /^(\d{1,2})\.\s*(.*)$/
@@ -17,14 +19,19 @@ function VerseNumber({ number }: { number: string }) {
   )
 }
 
-export function FormattedLyrics({ lyrics, hymnTitle, displayPreferences }: FormattedLyricsProps) {
+export function FormattedLyrics({
+  lyrics,
+  hymnTitle,
+  displayPreferences,
+  numberVerses = false,
+}: FormattedLyricsProps) {
   const typography = displayPreferences ? lyricDisplayClasses(displayPreferences) : 'text-lg leading-8 font-serif'
   const bodyClass = `whitespace-pre-line text-slate-800 dark:text-slate-100 ${typography}`
 
-  const preparedLyrics = useMemo(
-    () => (hymnTitle ? stripDuplicateTitleFromLyrics(lyrics, hymnTitle) : lyrics.trim()),
-    [hymnTitle, lyrics],
-  )
+  const preparedLyrics = useMemo(() => {
+    const trimmed = hymnTitle ? stripDuplicateTitleFromLyrics(lyrics, hymnTitle) : lyrics.trim()
+    return numberVerses ? numberUnlabeledVerses(trimmed) : trimmed
+  }, [hymnTitle, lyrics, numberVerses])
 
   const stanzas = preparedLyrics.split(/\n\n+/).filter((block) => block.trim())
 

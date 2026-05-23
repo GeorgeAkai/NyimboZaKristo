@@ -30,6 +30,9 @@
     "android:verify-signing": "bash scripts/android-verify-signing.sh",
     "android:assemble:release": "npm run android:sync && cd android && ./gradlew assembleRelease",
     "import:gccsatx": "node scripts/import-gccsatx-hymns.mjs",
+    "import:igbo-abu": "node scripts/import-igbo-abu.mjs",
+    "youtube:igbo": ".venv/bin/python scripts/fetch_igbo_youtube_ids.py",
+    "youtube:igbo:missing": ".venv/bin/python scripts/fetch_igbo_youtube_ids.py --only-missing",
     "youtube:english": ".venv/bin/python scripts/fetch_english_youtube_ids.py --force",
     "youtube:english:missing": ".venv/bin/python scripts/fetch_english_youtube_ids.py --only-missing"
   },
