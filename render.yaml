@@ -1,0 +1,68 @@
+# Render Blueprint — Nyimbo Za Kristo web app (Vite PWA static site)
+# Apply: https://dashboard.render.com/blueprint/new?repo=https://github.com/GeorgeAkai/NyimboZaKristo
+
+services:
+  - type: web
+    name: nyimbozakristo
+    runtime: static
+    plan: free
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+
+    buildFilter:
+      paths:
+        - src/**
+        - public/**
+        - scripts/lib/**
+        - index.html
+        - package.json
+        - package-lock.json
+        - vite.config.ts
+        - tsconfig*.json
+        - tailwind.config.js
+        - postcss.config.js
+        - eslint.config.js
+        - render.yaml
+
+    envVars:
+      - key: NODE_VERSION
+        value: "20.19.0"
+      - key: NODE_ENV
+        value: production
+
+    # Client-side app uses history API on a single URL; rewrite supports refresh & PWA entry.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+
+      - path: /manifest.webmanifest
+        name: Cache-Control
+        value: public, max-age=86400
+
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin

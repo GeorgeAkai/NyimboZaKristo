@@ -1,9 +1,13 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
+  },
   plugins: [
     react(),
     VitePWA({
@@ -31,7 +35,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,json,webmanifest}'],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.destination === 'document',
@@ -41,10 +45,17 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: ({ url }) => url.pathname.endsWith('/hymns.json'),
+            urlPattern: ({ url }) => url.pathname.endsWith('/offline-manifest.json'),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'hymns-cache',
+              cacheName: 'offline-manifest-cache',
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/instrumentals/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'instrumentals-cache',
             },
           },
         ],
