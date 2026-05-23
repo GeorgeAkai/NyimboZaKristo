@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="24" fill="#1A237E" />
+  <circle cx="96" cy="96" r="58" fill="none" stroke="#D4AF37" stroke-width="8" />
+  <text x="96" y="106" fill="#ffffff" font-size="38" text-anchor="middle" font-family="Arial, sans-serif">
+    NZK
+  </text>
+</svg>

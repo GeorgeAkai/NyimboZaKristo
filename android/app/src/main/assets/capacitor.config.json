@@ -1,0 +1,9 @@
+{
+	"appId": "sda.nyimbozakristo.app",
+	"appName": "Nyimbo Za Kristo",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https",
+		"cleartext": false
+	}
+}

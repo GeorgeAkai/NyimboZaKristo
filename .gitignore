@@ -1,0 +1,26 @@
+node_modules
+dist
+.venv
+__pycache__/
+*.pyc
+scripts/__pycache__/
+.env
+.env.*
+
+# Android signing (never commit secrets)
+android/keystore.properties
+*.keystore
+*.jks
+
+# Capacitor / Android build
+android/.gradle/
+android/app/build/
+android/build/
+android/capacitor-cordova-android-plugins/build/
+.idea/
+.DS_Store
+
+# Local tooling
+*.log
+.cursor/
+android/local.properties

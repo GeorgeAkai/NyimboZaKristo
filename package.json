@@ -1,0 +1,64 @@
+{
+  "name": "nyimbozakristo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0",
+    "minimatch": "^9.0.5",
+    "tar": "^7.5.14"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "cap:copy": "npx cap copy",
+    "cap:sync": "npx cap sync",
+    "cap:assets": "npx @capacitor/assets generate --android",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:build": "npm run android:sync && cd android && ./gradlew assembleDebug",
+    "android:bundle": "npm run android:sync && cd android && ./gradlew bundleRelease",
+    "android:play": "bash scripts/android-release-bundle.sh",
+    "android:verify-signing": "bash scripts/android-verify-signing.sh",
+    "android:assemble:release": "npm run android:sync && cd android && ./gradlew assembleRelease",
+    "import:gccsatx": "node scripts/import-gccsatx-hymns.mjs",
+    "youtube:english": ".venv/bin/python scripts/fetch_english_youtube_ids.py --force",
+    "youtube:english:missing": ".venv/bin/python scripts/fetch_english_youtube_ids.py --only-missing"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.6.5",
+    "@capacitor/cli": "^7.6.5",
+    "@capacitor/core": "^7.6.5",
+    "cheerio": "^1.2.0",
+    "framer-motion": "^12.38.0",
+    "fuse.js": "^7.3.0",
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-player": "^3.4.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^24.12.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.5.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.5.0",
+    "postcss": "^8.5.14",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.59.3",
+    "vite": "^5.4.21",
+    "vite-plugin-pwa": "^0.20.5"
+  }
+}
