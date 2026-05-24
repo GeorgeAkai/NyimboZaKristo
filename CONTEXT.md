@@ -7,7 +7,7 @@
 | **Production readiness** | The app meets a high UX bar (Nielsen’s 10 usability heuristics), not merely “builds and ships.” |
 | **Primary distribution** | **Google Play** installed Android app (`sda.nyimbozakristo.app` via Capacitor). |
 | **Secondary distribution** | **Web app** hosted on **Render**, deployed once the web build is production-ready (not the first ship target). |
-| **Offline lyrics** | Hymn lyrics (Swahili and English) must be readable **without internet** on Android. |
+| **Offline lyrics** | Hymn lyrics (Swahili, English, and Igbo) must be readable **without internet** on Android and web (bundled JSON). |
 | **Online-only media** | **YouTube video** playback requires an active internet connection. |
 | **Offline instrumentals (goal)** | Instrumental audio should play offline for the **most popular hymns** only, within a **50 MB** download budget; all other instrumentals stream online. |
 | **Popular hymn set** | English gccsatx instrumentals ranked by research, packed to **50 MB** (ADR-016); not Swahili in v1. |
@@ -20,13 +20,16 @@
 | **Hymn screen layout — with accompaniment (mobile)** | Accompaniment band **flexes between 35% and 45%** of the viewport (~40% target); lyrics fill the remainder and scroll. |
 | **Hymn screen layout — without accompaniment (mobile)** | **Empty-state card** flexes within **10–20%** of the viewport; lyrics fill the remainder and scroll. |
 | **Empty-state card** | UI shown when a hymn has no linked video and no linked audio; not a media player, only an informational placeholder in the accompaniment band. |
-| **Minimized player** | Compact persistent UI (`FloatingMediaPlayer` mini mode) that keeps audio/video playing after the user leaves the hymn detail screen. **Tap** → navigate back to that hymn; **X** → dismiss player and **stop playback completely**. |
+| **Minimized player** | Compact persistent UI (`MinimizedMediaPlayer` + hidden `BackgroundMediaPlayback`) that keeps audio/video playing after the user leaves the hymn detail screen. **Tap** → navigate back to that hymn; **X** → dismiss player and **stop playback completely**. |
 | **Accompaniment handoff** | Opening another hymn does **not** auto-switch playback; the user must **explicitly stop** or **tap play** on the new hymn’s video/audio to stop the old session and start the new one. |
-| **Hymn detail screen** | The per-hymn view showing lyrics plus accompaniment; implemented as `HymnDetail` (Swahili) and `EnglishHymnDetail` (English) with **identical layout rules**. |
-| **Hymn screen layout (portrait)** | Vertical split: accompaniment **top**, lyrics **bottom** (35–45% / 10–20% bands as defined above). |
+| **Hymn detail screen** | The per-hymn view showing lyrics plus accompaniment; `HymnDetailView` + `HymnDetailShell` with per-collection model builders in `hymnDetailModel.ts`. |
+| **Hymnal collection** | One of three corpora in the app: **`nzk`** (Swahili NZK), **`gccsatx`** (English), **`abu`** (Igbo Abu). |
+| **Abu / Igbo hymnal** | SDA Igbo hymnal lyrics imported from [joelezeu/Abu](https://github.com/joelezeu/Abu) (`assets/www` HTML, Windows-1252 source encoding). **186 hymns** in `src/data/igbo-hymns.json`. Video optional; no instrumentals in v1. |
+| **Choir selector** | Up to **3** YouTube performances per hymn (one per channel), chosen via dropdown on hymn detail. |
+| **Hymn screen layout (portrait)** | Vertical split: accompaniment **top**, lyrics **bottom** (35–45% / 10–20% bands). |
 | **Hymn screen layout (landscape, with accompaniment)** | **Side-by-side**: lyrics **left 60%**, video + accompaniment **right 40%**. |
-| **Hymn screen layout (landscape, without accompaniment)** | Lyrics **left ~80–90%**; **empty-state card** on the right in a **10–20%** column band (flexible within that range). |
-| **Hymn screen layout (tablet/desktop)** | Same **vertical** split as mobile portrait—no side-by-side at wider breakpoints except mobile landscape. |
+| **Hymn screen layout (landscape, without accompaniment)** | Lyrics **left ~80–90%**; empty-state card **right 10–20%**. |
+| **Hymn screen layout (tablet/desktop)** | At **`min-width: 1024px`**, side-by-side like mobile landscape: lyrics **left ~60%**, accompaniment **right ~40%**; lyrics column scrolls, right panel sticky. |
 
 ## Architectural Decision Records
 
@@ -48,7 +51,7 @@
 
 **Decision:** **Reading lyrics is the primary mode.** Video and instrumental audio are accompaniment only. On **mobile**, the hymn detail UI splits viewport height between an accompaniment band and scrollable lyrics. When accompaniment is present, the band **flexes between 35% and 45%** of the viewport (~40% target) across screen sizes—not a single fixed percentage.
 
-**Consequences:** UX reviews and layout work should judge the hymn detail screen by lyric readability first; media features must not dominate or displace the lyrics pane. Implementation must align existing components (`HymnDetail`, `EnglishHymnDetail`, `YoutubePlayer`, `FloatingMediaPlayer`) to responsive min/max constraints rather than a hardcoded 40/60 split.
+**Consequences:** UX reviews and layout work should judge the hymn detail screen by lyric readability first; media features must not dominate or displace the lyrics pane. Implementation uses `HymnDetailView` + `HymnDetailShell` with responsive min/max constraints rather than a hardcoded 40/60 split.
 
 ### ADR-003: No-accompaniment hymns use a compact empty-state card
 
@@ -64,21 +67,21 @@
 
 **Status:** Accepted
 
-**Context:** The app has separate detail components for Swahili (`HymnDetail`) and English (`EnglishHymnDetail`) hymn corpora.
+**Context:** The app has three hymnal collections (NZK, gccsatx, Abu) that share one hymn detail screen layout.
 
-**Decision:** Both screens use the **same layout rules**: lyrics-first, accompaniment band 35–45% when media exists, empty-state card 10–20% when none.
+**Decision:** `HymnDetailView` (one screen) with per–hymnal collection model builders (`hymnDetailModel.ts`) shares **`HymnDetailShell`** and the same layout resolver (`hymnDetailLayout.ts` / `useHymnDetailLayout`). All use **lyrics-first** rules: accompaniment band 35–45% when media exists, empty-state card 10–20% when none; `FormattedLyrics` + `LyricsScrollColumn` with scroll-to-reveal lyrics source footer.
 
-**Consequences:** Layout logic should be shared or duplicated consistently; UX review applies once per rule set, not per language.
+**Consequences:** Layout logic is centralized; UX review applies once per rule set. Swahili keeps bilingual toggle (Swahili / machine-assisted English). Igbo shows optional scripture subtitle and English hint from Abu source HTML.
 
-### ADR-005: Vertical hymn layout at all breakpoints
+### ADR-005: Desktop uses side-by-side layout at 1024px+
 
-**Status:** Accepted
+**Status:** Accepted (supersedes prior “vertical only on tablet/desktop” wording)
 
-**Context:** Wider viewports could use a side-by-side accompaniment + lyrics layout.
+**Context:** Wider viewports benefit from side-by-side lyrics + accompaniment; mobile portrait stays vertical.
 
-**Decision:** **Tablet and desktop keep the same vertical split** as mobile portrait (top accompaniment band, bottom scrollable lyrics). Percent bands (35–45% with media, 10–20% empty-state) apply on portrait and on tablet/desktop.
+**Decision:** **Portrait mobile** and **narrow tablet** keep vertical split (accompaniment top, lyrics bottom). **Mobile landscape** and **viewport ≥ 1024px** use horizontal split: lyrics **left ~60%**, accompaniment **right ~40%** (`desktop-with-media` / `landscape-with-media` in `hymnDetailLayout.ts`).
 
-**Consequences:** No separate wide-screen side-by-side layout for tablet/desktop; accompaniment may appear large on very wide screens—acceptable trade-off for consistency.
+**Consequences:** `useHymnDetailLayout` listens to `(min-width: 1024px)` and phone-landscape queries; desktop right panel is sticky with full video credits visible.
 
 ### ADR-006: Mobile landscape uses side-by-side 60/40 split
 
@@ -106,7 +109,7 @@
 
 **Context:** Users may browse other hymns or screens while singing along to accompaniment.
 
-**Decision:** If audio or video is playing on the hymn detail screen and the user **navigates away**, playback **continues** in a **minimized player** (existing `FloatingMediaPlayer` mini mode), not stopped automatically.
+**Decision:** If audio or video is playing on the hymn detail screen and the user **navigates away**, playback **continues** in the **minimized player** (`MinimizedMediaPlayer`), not stopped automatically.
 
 **Decision (interaction):** Tapping the minimized player **navigates back** to the hymn that is playing. **X** dismisses the minimized player and **stops playback completely** (no background audio/video).
 
@@ -138,7 +141,7 @@
 
 **Context:** Secondary Render deployment could have been a reduced “lyrics-only” experience to ship faster.
 
-**Decision:** The **Render-hosted web app must offer the same features** as the Play Store Android app (lyrics, search, video, instrumental audio, bilingual corpora, minimized player behavior, etc.)—not a stripped subset.
+**Decision:** The **Render-hosted web app must offer the same features** as the Play Store Android app (lyrics, search, video, instrumental audio, **three hymnals**, minimized player behavior, etc.)—not a stripped subset.
 
 **Consequences:** No Android-only feature branches without a planned web equivalent; QA checklist applies to both targets before calling web “ready.”
 
@@ -215,9 +218,9 @@
 
 **Context:** Production UX work could redesign entry into search, recents, or favorites.
 
-**Decision:** **Leave home as-is:** `HomeScreen` shows “Choose a hymnal” with two cards—**Nyimbo za Kristo** (Swahili NZK) and **English Hymns** (gccsatx)—then the user enters that collection’s list/search flow.
+**Decision:** **Leave home as-is:** `HomeScreen` shows “Choose a hymnal” with **three** cards—**Nyimbo za Kristo** (Swahili NZK), **English Hymns** (gccsatx), and **Igbo Hymns (Abu)**—then the user enters that collection’s list/search flow.
 
-**Consequences:** No v1 work on recents/favorites landing page; production polish focuses on hymn detail, media, and list/search within each collection.
+**Consequences:** No v1 work on recents/favorites landing page; production polish focuses on hymn detail, media, and list/search within each collection. App boot defaults to **home** (hymnal picker) unless valid browser history state exists.
 
 ### ADR-018: Bug discovery via structured QA pass
 
@@ -369,12 +372,12 @@
 | Area | Cases |
 |------|--------|
 | **Heuristic: visibility** | Offline banners; empty-state card; loading states for YouTube |
-| **Heuristic: match real world** | Swahili + English corpora; hymn numbers; choir selector |
+| **Heuristic: match real world** | Swahili + English + Igbo corpora; hymn numbers; choir selector (≤3) |
 | **Heuristic: user control** | Back stack; mini player X stops; no auto-switch (ADR-009) |
-| **Layout** | Portrait 35–45% / 10–20%; landscape 60/40 and 80–90%; tablet vertical; Large lyrics |
+| **Layout** | Portrait 35–45% / 10–20%; landscape & desktop ≥1024px 60/40; Large lyrics |
 | **Media** | Video online-only; bundled English MP3 offline; handoff tap-to-play new hymn |
 | **Settings** | Defaults Medium/Merriweather; persistence; theme System/Light/Dark |
-| **Regression** | Home picker; search; scroll restore; dark mode; Credits |
+| **Regression** | Home picker (3 hymnals); search; scroll restore; dark mode; Credits |
 | **Android** | Back gesture, safe areas, release build, airplane mode |
 
 **Consequences:** No Play upload until P0/P1 from this pass are closed; repeat for Render web before ADR-011 “ready.”
@@ -386,7 +389,7 @@
 - Swahili offline instrumentals  
 - Favorites / recents on home  
 - Continuous font-size slider  
-- Side-by-side layout on tablet/desktop  
+- Igbo offline instrumentals  
 - In-app analytics-driven “popular” list  
 - Prev/next hymn swipe gestures (consider v1.1)
 
@@ -397,7 +400,7 @@
 | # | Heuristic | How v1 addresses it |
 |---|-----------|---------------------|
 | 1 | Visibility of system status | ADR-026 offline/empty states; mini player shows active hymn |
-| 2 | Match real world | Hymnal numbers, bilingual labels, choir credits |
+| 2 | Match real world | Hymnal numbers, Swahili/English/Igbo labels, choir credits |
 | 3 | User control & freedom | ADR-008/009; back navigation; explicit stop |
 | 4 | Consistency | ADR-004/005 shared layouts; Settings apply globally |
 | 5 | Error prevention | No auto-switch; fixed font steps (ADR-019) |
@@ -409,12 +412,62 @@
 
 ---
 
-## Implementation priority (when build starts)
+### ADR-032: Igbo Abu hymnal as third collection
 
-1. Hymn detail layout system (ADR-002–007, ADR-025)  
-2. Offline/empty accompaniment states (ADR-026)  
-3. Mini player + now playing strip (ADR-027–028, ADR-008–009)  
-4. Settings + lyric preferences (ADR-019–024)  
-5. English offline bundle pipeline (ADR-029)  
-6. QA pass (ADR-030)  
-7. Play Store release → Render web (ADR-010–011)
+**Status:** Accepted
+
+**Context:** Nigerian SDA congregations use the Igbo *Abu* hymnal; lyrics exist in the open-source [joelezeu/Abu](https://github.com/joelezeu/Abu) repo as legacy HTML (Windows-1252, not UTF-8).
+
+**Decision:** Add collection **`abu`** with lyrics-only detail UI matching English/Swahili shell. Import via `npm run import:igbo-abu` → `src/data/igbo-hymns.json`. Hymn IDs follow Abu filenames (`abu{N}.html` → `id: N`). Optional `english_hint` and scripture lines preserved from source `#align` block.
+
+**Consequences:** No gccsatx-style instrumentals for Igbo in v1. YouTube matching is a separate script (`npm run youtube:igbo` / `youtube:igbo:missing`). Re-import required after upstream Abu fixes or encoding corrections.
+
+### ADR-033: Maximum three YouTube options per hymn
+
+**Status:** Accepted
+
+**Context:** English fetch originally allowed five choir slots; UI and `buildMediaSession` should stay consistent across corpora.
+
+**Decision:** Cap **`youtube_options` at 3** per hymn (one video per channel). Enforced in `hymnMedia.ts` (`MAX_YOUTUBE_OPTIONS = 3`). Fetch scripts (`fetch_english_youtube_ids.py`, `fetch_youtube_ids.py`, `fetch_igbo_youtube_ids.py`) use `MAX_OPTIONS = 3`.
+
+**Consequences:** Existing JSON with >3 options is truncated at runtime; re-fetch to persist trimmed lists.
+
+### ADR-034: Render static site deployment
+
+**Status:** Accepted
+
+**Context:** Secondary web target (ADR-010) needs reproducible hosting.
+
+**Decision:** Deploy as **Render static site** via [`render.yaml`](render.yaml): `npm ci --include=dev && npm run build`, publish `./dist`, SPA rewrite `/*` → `/index.html`, Node **20.19.0**. **Do not** set `NODE_ENV=production` on the service (skips devDependencies needed for Vite/TypeScript). **Do not** set `plan: free` on static sites (invalid in Blueprint).
+
+**Consequences:** PWA service worker precaches bundled hymn JSON and assets; smoke-test home → each hymnal → detail after deploy.
+
+---
+
+## Data corpora
+
+| Collection | File | Count | Video | Instrumental | Import / refresh |
+|------------|------|-------|-------|--------------|------------------|
+| **nzk** (Swahili) | `src/data/hymns.json` | ~220 | YouTube (`fetch_youtube_ids.py`) | Online only | `scripts/import-hymns.mjs` |
+| **gccsatx** (English) | `src/data/gccsatx-hymns.json` | ~350 | YouTube (`fetch_english_youtube_ids.py`) | Remote MP3 URLs | `npm run import:gccsatx` |
+| **abu** (Igbo) | `src/data/igbo-hymns.json` | 186 | YouTube (`fetch_igbo_youtube_ids.py`; ~94 matched as of 2026-05) | None | `npm run import:igbo-abu` |
+
+**Deep modules (Vitest):** `hymnDetailLayout`, `displayPreferences`, `accompanimentSession`, `appNavigation`, `lyricsPipeline`, `mediaPlaybackController`, `offlineInstrumentals`, `instrumentalSource`, `accompanimentBandState`, `lyricsDisplay`, `lyricsVerseNumbering`, `hymnDetailModel`, `greedy-offline-bundle`.
+
+**Navigation:** App boot reads **browser history state** when valid; otherwise **home** (hymnal picker). Collections: `home` | `nzk` | `gccsatx` | `abu` | `settings` | `credits`.
+
+---
+
+## Implementation status (2026-05)
+
+| Area | Status |
+|------|--------|
+| Hymn detail layout (portrait / landscape / desktop) | **Done** |
+| Shared detail shell + formatted lyrics + scroll footer | **Done** (all three corpora) |
+| Settings, theme, lyric fonts | **Done** |
+| Media handoff, mini player, now playing strip | **Done** |
+| Igbo Abu lyrics + UI | **Done** |
+| Igbo YouTube matching | **Partial** (~50% hymns; re-run `youtube:igbo:missing`) |
+| English offline instrumentals bundle | **Partial** (script + manifest; MP3s not committed) |
+| Render web deploy | **Configured** (`render.yaml`; verify live deploy) |
+| ADR-030 QA (Play + Render) | **Not done** |
